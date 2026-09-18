@@ -1,0 +1,85 @@
+name: Build unsigned IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract submitted archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          unzip -q "PainelSport3105_corrigido.zip" -d source
+
+      - name: Locate Xcode project
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT="$(find source -type d -name '*.xcodeproj' -not -path '*/Pods/*' | head -n 1)"
+          if [ -z "$PROJECT" ]; then
+            echo "No .xcodeproj found in the submitted archive" >&2
+            exit 1
+          fi
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+          SCHEME="$(xcodebuild -list -json -project "$PROJECT" | jq -r '.project.schemes[0] // empty')"
+          if [ -z "$SCHEME" ]; then
+            echo "No Xcode scheme found" >&2
+            exit 1
+          fi
+          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+          echo "Using project: $PROJECT"
+          echo "Using scheme: $SCHEME"
+
+      - name: Build unsigned archive
+        shell: bash
+        env:
+          PROJECT: ${{ steps.locate.outputs.project }}
+          SCHEME: ${{ steps.locate.outputs.scheme }}
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/PainelSport.xcarchive" \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$(find "$RUNNER_TEMP/PainelSport.xcarchive/Products/Applications" -maxdepth 1 -type d -name '*.app' | head -n 1)"
+          if [ -z "$APP" ]; then
+            echo "No .app was produced" >&2
+            exit 1
+          fi
+          rm -rf "$RUNNER_TEMP/Payload"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          /usr/bin/zip -qry PainelSport_unsigned.ipa Payload
+          cp PainelSport_unsigned.ipa "$GITHUB_WORKSPACE/"
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PainelSport-unsigned-ipa
+          path: PainelSport_unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
