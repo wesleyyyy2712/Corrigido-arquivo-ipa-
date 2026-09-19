@@ -70,7 +70,7 @@ final class Panel3105Bridge: ObservableObject {
     private func pollResponse(requestID: UUID, projectID: UUID, deadline: Date, completion: @escaping (Response) -> Void) {
         let type = responsePrefix + requestID.uuidString
         if let data = UIPasteboard.general.data(forPasteboardType: type), let response = try? PropertyListDecoder().decode(Response.self, from: data) {
-            log("bridge: callback received id=\(requestID.uuidString), state=\(response.state.rawValue), success=\(response.success), error=\(response.errorCode ?? \"none\")")
+            log("bridge: callback received id=\(requestID.uuidString), state=\(response.state.rawValue), success=\(response.success), error=\(response.errorCode ?? "none")")
             update(projectID: projectID, state: response.state); completion(response); return
         }
         if Date() >= deadline {
