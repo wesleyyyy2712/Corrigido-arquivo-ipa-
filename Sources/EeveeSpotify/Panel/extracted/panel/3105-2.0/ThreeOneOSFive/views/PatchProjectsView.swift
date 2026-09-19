@@ -186,6 +186,12 @@ struct PatchProjectsView: View {
                     .disabled(store.isBusy || isImportingWallpapers)
                     .accessibilityLabel(language.text("patch.add"))
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: onOpenLogs) {
+                        Image(systemName: "apple.terminal")
+                    }
+                    .accessibilityLabel(language.text("accessibility.open_logs"))
+                }
                 AppUtilityToolbar(
                     language: language,
                     onOpenSettings: onOpenSettings,
