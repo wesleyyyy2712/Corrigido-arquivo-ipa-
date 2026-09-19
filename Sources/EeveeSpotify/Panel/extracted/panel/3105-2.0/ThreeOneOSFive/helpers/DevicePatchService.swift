@@ -6,7 +6,7 @@ enum DevicePatchService {
         log("apply: project=\(project.id.uuidString), bundleIDs=\(bundleIDs.joined(separator: ",")), rules=\(project.rules.count), directories=\(project.directories.count)")
         return try withResolvedContainers(bundleIDs: bundleIDs) { roots in
             log("apply: resolved containers=\(roots.map { "\($0.key)=\($0.value.path)" }.sorted().joined(separator: ";"))")
-            try PatchTransaction.apply(
+            return try PatchTransaction.apply(
                 project: project,
                 backupRoot: try PatchProjectLibrary.backupRootURL(),
                 containerResolver: { bundleID in
