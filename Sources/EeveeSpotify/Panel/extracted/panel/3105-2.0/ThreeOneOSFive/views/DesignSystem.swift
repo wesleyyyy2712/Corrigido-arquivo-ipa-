@@ -1,22 +1,14 @@
 import SwiftUI
 
 enum AppTheme {
-    static var accent: Color {
-        switch UserDefaults.standard.string(forKey: "app.accentColor") {
-        case "blue": return .blue
-        case "purple": return .purple
-        case "green": return .green
-        case "orange": return .orange
-        case "pink": return .pink
-        default:
-            return Color(uiColor: UIColor { traits in
-                traits.userInterfaceStyle == .dark
-                    ? UIColor(red: 1.00, green: 0.23, blue: 0.28, alpha: 1.00)
-                    : UIColor(red: 0.82, green: 0.08, blue: 0.12, alpha: 1.00)
-            })
+    static let accent = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 1.00, green: 0.64, blue: 0.42, alpha: 1.00)
+                : UIColor(red: 0.85, green: 0.42, blue: 0.20, alpha: 1.00)
         }
-    }
-    static let pageBackground = Color(uiColor: .black)
+    )
+    static let pageBackground = Color(uiColor: .systemBackground)
     static let consoleBackground = Color(uiColor: .secondarySystemBackground)
     static let pageInset: CGFloat = 16
     static let rowIconSize: CGFloat = 17
@@ -30,40 +22,6 @@ enum AppTheme {
     static let contentCardCornerRadius: CGFloat = 20
     static let contentCardInset: CGFloat = 16
     static let contentCardPadding: CGFloat = 16
-    static let glassCardOpacity: CGFloat = 0.10
-    static let glassCardBorderOpacity: CGFloat = 0.24
-}
-
-struct GlassCardBackground: View {
-    var body: some View {
-        RoundedRectangle(
-            cornerRadius: AppTheme.contentCardCornerRadius,
-            style: .continuous
-        )
-        .fill(.ultraThinMaterial)
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: AppTheme.contentCardCornerRadius,
-                style: .continuous
-            )
-            .fill(AppTheme.accent.opacity(AppTheme.glassCardOpacity))
-        }
-    }
-}
-
-struct GlassCardBorder: View {
-    var body: some View {
-        RoundedRectangle(
-            cornerRadius: AppTheme.contentCardCornerRadius,
-            style: .continuous
-        )
-        .strokeBorder(
-            Color.white.opacity(AppTheme.glassCardBorderOpacity),
-            lineWidth: 0.8
-        )
-        .shadow(color: .black.opacity(0.28), radius: 12, y: 7)
-        .accessibilityHidden(true)
-    }
 }
 
 struct AppCardBorder: View {
