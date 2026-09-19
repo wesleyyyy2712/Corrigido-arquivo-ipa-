@@ -43,6 +43,7 @@
             <key>CFBundleURLSchemes</key>
             <array>
                 <string>threeoneosfive</string>
+                <string>yangjiii3105bridge</string>
             </array>
         </dict>
     </array>

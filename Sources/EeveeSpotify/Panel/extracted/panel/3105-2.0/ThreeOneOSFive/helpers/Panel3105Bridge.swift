@@ -29,7 +29,7 @@ final class Panel3105Bridge: ObservableObject {
     @Published private(set) var states: [UUID: OperationState] = [:]
     private let requestType = "com.yangjiii.3105.panel-request"
     private let responsePrefix = "com.yangjiii.3105.panel-response."
-    private let callbackScheme = "threeoneosfive"
+    private let callbackScheme = "yangjiii3105bridge"
     private init() {}
 
     func state(for projectID: UUID) -> OperationState { states[projectID] ?? .idle }
