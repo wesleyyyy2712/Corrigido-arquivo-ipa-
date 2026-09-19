@@ -15,6 +15,7 @@ struct ThreeOneOSFiveApp: App {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init() {
+        Panel3105Bridge.shared.startReceiver()
         setupLogCapture()
         log("app: 3105 launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machineName)")
     }
@@ -69,6 +70,7 @@ struct ThreeOneOSFiveApp: App {
                 appState.detectSupport()
             }
             .onOpenURL { url in
+                guard !Panel3105Bridge.shared.handle(url: url) else { return }
                 patchDraftCoordinator.presentImport(url)
             }
         }

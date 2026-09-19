@@ -445,7 +445,7 @@ private struct PatchProjectRow: View {
                 Toggle(
                     "",
                     isOn: Binding(
-                        get: { DevicePatchService.latestReceipt(projectID: item.id) != nil },
+                        get: { PatchExecutionCoordinator.latestReceipt(projectID: item.id) != nil },
                         set: { store.setActive(item, active: $0) }
                     )
                 )
@@ -583,13 +583,14 @@ private struct PatchProjectDetailView: View {
     @State private var isWorking = false
     @State private var actionAlert: PatchStoreAlert?
     @State private var shareRequest: PatchShareRequest?
+    @ObservedObject private var bridge = Panel3105Bridge.shared
 
     private var item: PatchLibraryItem? {
         store.items.first(where: { $0.id == projectID })
     }
 
     private var receipt: PatchTransactionReceipt? {
-        DevicePatchService.latestReceipt(projectID: projectID)
+        PatchExecutionCoordinator.latestReceipt(projectID: projectID)
     }
 
     private var isWorkspaceProject: Bool {
@@ -732,6 +733,17 @@ private struct PatchProjectDetailView: View {
                             Spacer()
                         }
                         .padding(.vertical, 6)
+                    }
+                }
+
+                if bridge.state(for: projectID) != .idle {
+                    Section {
+                        HStack(spacing: 10) {
+                            if bridge.state(for: projectID) == .sending || bridge.state(for: projectID) == .applying { ProgressView() }
+                            Text(bridge.state(for: projectID).displayName)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(bridge.state(for: projectID) == .failed ? .red : AppTheme.accent)
+                        }
                     }
                 }
 
@@ -930,7 +942,7 @@ private struct PatchProjectDetailView: View {
                 let project = item.summary.schemaVersion >= 2 && item.canInspectContents
                     ? try PatchProjectLibrary.synchronizeWorkspace(item: item)
                     : baseProject
-                _ = try DevicePatchService.apply(project: project)
+                _ = try PatchExecutionCoordinator.apply(project: project)
                 await MainActor.run {
                     store.reload()
                     isWorking = false
@@ -1011,9 +1023,9 @@ private struct PatchProjectDetailView: View {
         isWorking = true
         Task.detached(priority: .userInitiated) {
             do {
-                let inspection = try DevicePatchService.inspectRestore(receipt: receipt)
+                let inspection = try PatchExecutionCoordinator.inspectRestore(project: item?.project ?? PatchProject(id: projectID, name: "", rules: []))
                 if inspection.changedTargets.isEmpty {
-                    try DevicePatchService.restore(receipt: receipt)
+                    try PatchExecutionCoordinator.restore(project: item?.project ?? PatchProject(id: projectID, name: "", rules: []))
                     await MainActor.run {
                         isWorking = false
                         actionAlert = PatchStoreAlert(
@@ -1054,10 +1066,7 @@ private struct PatchProjectDetailView: View {
         isWorking = true
         Task.detached(priority: .userInitiated) {
             do {
-                try DevicePatchService.restore(
-                    receipt: receipt,
-                    allowChangedTargets: allowChangedTargets
-                )
+                try PatchExecutionCoordinator.restore(project: item?.project ?? PatchProject(id: projectID, name: "", rules: []), allowChangedTargets: allowChangedTargets)
                 await MainActor.run {
                     isWorking = false
                     actionAlert = PatchStoreAlert(titleKey: "common.done", messageKey: "patch.restored_message")
@@ -1085,7 +1094,7 @@ private struct PatchProjectDetailView: View {
         isWorking = true
         Task.detached(priority: .userInitiated) {
             do {
-                try DevicePatchService.resetToAppliedState(
+                try PatchExecutionCoordinator.resetToAppliedState(
                     receipt: receipt,
                     project: project
                 )
