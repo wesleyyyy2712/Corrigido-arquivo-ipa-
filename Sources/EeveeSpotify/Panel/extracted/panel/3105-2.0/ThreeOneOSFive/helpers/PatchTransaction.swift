@@ -207,9 +207,11 @@ enum PatchTransaction {
         let transactionDirectory = backupRoot
             .appendingPathComponent(project.id.uuidString, isDirectory: true)
             .appendingPathComponent(transactionID.uuidString, isDirectory: true)
+        log("transaction: preparing backup directory path=\(transactionDirectory.path)")
         do {
             try fileManager.createDirectory(at: transactionDirectory, withIntermediateDirectories: true)
         } catch {
+            log("transaction: backup directory creation failed path=\(transactionDirectory.path) error=\(String(describing: error))")
             throw PatchPackageError.applyFailed
         }
 
@@ -232,12 +234,14 @@ enum PatchTransaction {
                 var originalDigest: Data?
                 if let backupFilename {
                     let backupURL = transactionDirectory.appendingPathComponent(backupFilename)
+                    log("transaction: backing up target=\(resolved.target.path) to=\(backupURL.path)")
                     try fileManager.copyItem(at: resolved.target, to: backupURL)
                     originalDigest = try digestFile(backupURL)
                 }
                 let replacementDigest = digest(resolved.rule.replacementData)
                 if let appliedFilename {
                     let appliedURL = transactionDirectory.appendingPathComponent(appliedFilename)
+                    log("transaction: writing staged replacement=\(appliedURL.path) bytes=\(resolved.rule.replacementData.count)")
                     try resolved.rule.replacementData.write(to: appliedURL, options: .atomic)
                     guard try digestFile(appliedURL) == replacementDigest else {
                         throw PatchPackageError.applyFailed
@@ -256,8 +260,11 @@ enum PatchTransaction {
                 ))
             }
         } catch let error as PatchPackageError {
+            log("transaction: staging failed code=\(error.localizationKey)")
             throw error
         } catch {
+            let nsError = error as NSError
+            log("transaction: staging failed domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
             throw PatchPackageError.applyFailed
         }
 
@@ -274,11 +281,13 @@ enum PatchTransaction {
         do {
             try writeJournal(journal, to: journalURL)
         } catch {
+            log("transaction: journal write failed path=\(journalURL.path) error=\(String(describing: error))")
             throw PatchPackageError.applyFailed
         }
 
         do {
             for resolved in resolvedDirectories where !fileManager.fileExists(atPath: resolved.target.path) {
+                log("transaction: creating target directory=\(resolved.target.path)")
                 try fileManager.createDirectory(
                     at: resolved.target,
                     withIntermediateDirectories: false
@@ -286,6 +295,7 @@ enum PatchTransaction {
             }
             for (index, resolved) in resolvedRules.enumerated() {
                 try beforeWrite?(index)
+                log("transaction: writing target index=\(index) path=\(resolved.target.path) bytes=\(resolved.rule.replacementData.count)")
                 try atomicWrite(
                     resolved.rule.replacementData,
                     to: resolved.target,
@@ -304,6 +314,8 @@ enum PatchTransaction {
                 journalURL: journalURL
             )
         } catch {
+            let nsError = error as NSError
+            log("transaction: apply write failed domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
             do {
                 try restoreRecords(
                     records,

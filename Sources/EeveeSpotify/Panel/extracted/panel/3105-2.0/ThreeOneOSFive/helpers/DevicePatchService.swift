@@ -3,7 +3,9 @@ import Foundation
 enum DevicePatchService {
     static func apply(project: PatchProject) throws -> PatchTransactionReceipt {
         let bundleIDs = orderedBundleIdentifiers(in: project)
+        log("apply: project=\(project.id.uuidString), bundleIDs=\(bundleIDs.joined(separator: ",")), rules=\(project.rules.count), directories=\(project.directories.count)")
         return try withResolvedContainers(bundleIDs: bundleIDs) { roots in
+            log("apply: resolved containers=\(roots.map { "\($0.key)=\($0.value.path)" }.sorted().joined(separator: ";"))")
             try PatchTransaction.apply(
                 project: project,
                 backupRoot: try PatchProjectLibrary.backupRootURL(),
@@ -86,10 +88,13 @@ enum DevicePatchService {
         var roots: [String: URL] = [:]
 
         for bundleID in bundleIDs {
+            log("apply: resolving container for bundle=\(bundleID)")
             guard let path = ContainerStore.resolveAppContainerPath(bundleID: bundleID),
                   ContainerStore.isApplicationContainerPath(path) else {
+                log("apply: container unavailable or rejected for bundle=\(bundleID)")
                 throw PatchPackageError.targetAppUnavailable(bundleID)
             }
+            log("apply: container path accepted bundle=\(bundleID), path=\(path)")
             roots[bundleID] = PatchPathValidator.canonicalFileURL(URL(fileURLWithPath: path, isDirectory: true))
         }
         return try operation(roots)
