@@ -1,0 +1,138 @@
+name: Package Minimal Panel IPA Unsigned
+
+on:
+  workflow_dispatch:
+    inputs:
+      spotify_ipa_url:
+        description: "Direct URL or MediaFire page for the authorized Spotify IPA"
+        required: true
+        type: string
+      panel_build_run_id:
+        description: "Successful Build Minimal Panel Host run ID"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  package:
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: zsh {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download and audit minimal panel artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.panel_build_run_id }}
+          name: Minimal-PanelHost
+          path: ${{ github.workspace }}/panel-artifact
+
+      - name: Validate minimal panel binary
+        run: |
+          set -euo pipefail
+          PANEL="$GITHUB_WORKSPACE/panel-artifact/PanelHost.dylib"
+          test -s "$PANEL"
+          otool -L "$PANEL" | tee "$RUNNER_TEMP/panel-dependencies.txt"
+          ! grep -Eq 'Orion|CydiaSubstrate|SwiftProtobuf|EeveeSpotify' "$RUNNER_TEMP/panel-dependencies.txt"
+          grep -F '/System/Library/Frameworks/MediaPlayer.framework/MediaPlayer' "$RUNNER_TEMP/panel-dependencies.txt" >/dev/null
+          grep -aFq '0wwPcA6wtMf6HUMpIRdeP7' "$PANEL"
+          ! grep -aFq 'orion_init' "$PANEL"
+
+      - name: Install atomic Mach-O rewrite dependency
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/lief-venv"
+          "$RUNNER_TEMP/lief-venv/bin/python" -m pip install --upgrade pip lief
+          echo "LIEF_PYTHON=$RUNNER_TEMP/lief-venv/bin/python" >> "$GITHUB_ENV"
+
+      - name: Download and integrate authorized base IPA
+        env:
+          SOURCE_URL: ${{ inputs.spotify_ipa_url }}
+        run: |
+          set -euo pipefail
+          if [[ "$SOURCE_URL" == https://download*.mediafire.com/* || "$SOURCE_URL" == *.ipa || "$SOURCE_URL" == *.ipa\?* ]]; then
+            DOWNLOAD_URL="$SOURCE_URL"
+          else
+            DOWNLOAD_URL=$(curl -fsSL --retry 3 -A 'Mozilla/5.0' "$SOURCE_URL" | grep -oE 'https://download[0-9]+\.mediafire\.com[^" ]+' | sed -n '1p' | sed 's/&amp;/\&/g' || true)
+          fi
+          test -n "$DOWNLOAD_URL"
+          curl -fL --retry 5 --retry-all-errors -A 'Mozilla/5.0' "$DOWNLOAD_URL" -o "$RUNNER_TEMP/spotify-input.ipa"
+          unzip -tq "$RUNNER_TEMP/spotify-input.ipa"
+          rm -rf "$RUNNER_TEMP/spotify-input"
+          unzip -q "$RUNNER_TEMP/spotify-input.ipa" -d "$RUNNER_TEMP/spotify-input"
+          APP_DIR=$(find "$RUNNER_TEMP/spotify-input/Payload" -maxdepth 1 -type d -name '*.app' -print -quit)
+          test -n "$APP_DIR"
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_DIR/Info.plist")
+          MAIN_EXECUTABLE="$APP_DIR/$EXECUTABLE"
+          test -s "$MAIN_EXECUTABLE"
+          "$LIEF_PYTHON" "$GITHUB_WORKSPACE/Tools/rewrite_spotify_loads.py" "$MAIN_EXECUTABLE"
+          rm -rf \
+            "$APP_DIR/EeveeSpotify.bundle" \
+            "$APP_DIR/Frameworks/EeveeSpotify.dylib" \
+            "$APP_DIR/Frameworks/Orion.framework" \
+            "$APP_DIR/Frameworks/CydiaSubstrate.framework" \
+            "$APP_DIR/Frameworks/SwiftProtobuf.framework" \
+            "$APP_DIR/Frameworks/PanelHost.dylib" \
+            "$APP_DIR/PlugIns" "$APP_DIR/Watch" "$APP_DIR/AppClips"
+          mkdir -p "$APP_DIR/Frameworks"
+          cp "$GITHUB_WORKSPACE/panel-artifact/PanelHost.dylib" "$APP_DIR/Frameworks/PanelHost.dylib"
+          cp -R "$GITHUB_WORKSPACE/layout/Library/Application Support/EeveeSpotify.bundle" "$APP_DIR/PanelHost.bundle"
+          test "$(otool -L "$MAIN_EXECUTABLE" | grep -Fc '@rpath/PanelHost.dylib')" -eq 1
+          for forbidden in EeveeSpotify Orion CydiaSubstrate SwiftProtobuf; do
+            ! otool -L "$MAIN_EXECUTABLE" | grep -Fq "$forbidden"
+          done
+          echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
+          echo "MAIN_EXECUTABLE=$MAIN_EXECUTABLE" >> "$GITHUB_ENV"
+
+      - name: Remove all existing signing material
+        run: |
+          set -euo pipefail
+          find "$APP_DIR" -type f -name embedded.mobileprovision -delete
+          find "$APP_DIR" -type d -name _CodeSignature -prune -exec rm -rf {} +
+          find "$APP_DIR" -type f -name CodeResources -delete
+          find "$APP_DIR" -type f -print0 | while IFS= read -r -d '' file; do
+            if file "$file" | grep -q 'Mach-O'; then
+              codesign --remove-signature "$file" 2>/dev/null || true
+            fi
+          done
+          codesign --remove-signature "$APP_DIR" 2>/dev/null || true
+          ! find "$APP_DIR" -type f -name embedded.mobileprovision | grep -q .
+          ! find "$APP_DIR" -type d -name _CodeSignature | grep -q .
+
+      - name: Verify unsigned package and create IPA
+        run: |
+          set -euo pipefail
+          test "$(otool -L "$MAIN_EXECUTABLE" | grep -Fc '@rpath/PanelHost.dylib')" -eq 1
+          PANEL="$APP_DIR/Frameworks/PanelHost.dylib"
+          test -s "$PANEL"
+          otool -L "$PANEL" > "$RUNNER_TEMP/final-panel-dependencies.txt"
+          ! grep -Eq 'Orion|CydiaSubstrate|SwiftProtobuf|EeveeSpotify' "$RUNNER_TEMP/final-panel-dependencies.txt"
+          mkdir -p "$GITHUB_WORKSPACE/output"
+          OUTPUT="$GITHUB_WORKSPACE/output/Painel-Sport-Minimal-Spotify-8.9.82-unsigned.ipa"
+          (cd "$RUNNER_TEMP/spotify-input" && zip -qry "$OUTPUT" Payload)
+          unzip -tq "$OUTPUT"
+          test -s "$OUTPUT"
+          echo "OUTPUT_IPA=$OUTPUT" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Painel-Sport-Minimal-IPA-Unsigned
+          path: ${{ env.OUTPUT_IPA }}
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Publish unsigned IPA release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: minimal-ipa-unsigned-${{ github.run_number }}
+          name: Painel Sport Minimal IPA Unsigned
+          body: Unsigned integrated panel build for external signing. No certificate or provisioning profile is included.
+          files: ${{ env.OUTPUT_IPA }}
+          fail_on_unmatched_files: true
