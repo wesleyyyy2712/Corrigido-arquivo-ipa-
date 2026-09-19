@@ -97,7 +97,7 @@ jobs:
           SOURCE_URL: ${{ inputs.spotify_ipa_url }}
         run: |
           set -euo pipefail
-          if [[ "$SOURCE_URL" == https://download*.mediafire.com/* ]]; then
+          if [[ "$SOURCE_URL" == https://download*.mediafire.com/* || "$SOURCE_URL" == *.ipa || "$SOURCE_URL" == *.ipa\?* ]]; then
             DOWNLOAD_URL="$SOURCE_URL"
           else
             DOWNLOAD_URL=$(curl -fsSL --retry 3 -A 'Mozilla/5.0' "$SOURCE_URL" | grep -oE 'https://download[0-9]+\.mediafire\.com[^" ]+' | sed -n '1p' | sed 's/&amp;/\&/g' || true)
