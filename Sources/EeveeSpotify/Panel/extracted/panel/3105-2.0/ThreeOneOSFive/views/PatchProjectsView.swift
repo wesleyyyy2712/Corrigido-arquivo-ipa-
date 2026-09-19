@@ -1019,13 +1019,13 @@ private struct PatchProjectDetailView: View {
     }
 
     private func prepareRestore() {
-        guard let receipt else { return }
+        guard receipt != nil, let project = item?.project else { return }
         isWorking = true
         Task.detached(priority: .userInitiated) {
             do {
-                let inspection = try PatchExecutionCoordinator.inspectRestore(project: item?.project ?? PatchProject(id: projectID, name: "", rules: []))
+                let inspection = try await PatchExecutionCoordinator.inspectRestore(project: project)
                 if inspection.changedTargets.isEmpty {
-                    try PatchExecutionCoordinator.restore(project: item?.project ?? PatchProject(id: projectID, name: "", rules: []))
+                    try await PatchExecutionCoordinator.restore(project: project)
                     await MainActor.run {
                         isWorking = false
                         actionAlert = PatchStoreAlert(
@@ -1062,11 +1062,11 @@ private struct PatchProjectDetailView: View {
     }
 
     private func restore(allowChangedTargets: Bool) {
-        guard let receipt else { return }
+        guard receipt != nil, let project = item?.project else { return }
         isWorking = true
         Task.detached(priority: .userInitiated) {
             do {
-                try PatchExecutionCoordinator.restore(project: item?.project ?? PatchProject(id: projectID, name: "", rules: []), allowChangedTargets: allowChangedTargets)
+                try await PatchExecutionCoordinator.restore(project: project, allowChangedTargets: allowChangedTargets)
                 await MainActor.run {
                     isWorking = false
                     actionAlert = PatchStoreAlert(titleKey: "common.done", messageKey: "patch.restored_message")
