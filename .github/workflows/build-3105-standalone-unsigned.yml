@@ -1,0 +1,67 @@
+name: Build 3105 Standalone IPA Unsigned
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: zsh {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build standalone 3105 without signing
+        run: |
+          set -euo pipefail
+          PROJECT="$GITHUB_WORKSPACE/Sources/EeveeSpotify/Panel/extracted/panel/3105-2.0/ThreeOneOSFive.xcodeproj"
+          ARCHIVE="$RUNNER_TEMP/ThreeOneOSFive.xcarchive"
+          xcodebuild \
+            -project "$PROJECT" \
+            -scheme 3105 \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$ARCHIVE" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            IPHONEOS_DEPLOYMENT_TARGET=17.0 \
+            archive
+          APP="$ARCHIVE/Products/Applications/3105.app"
+          test -d "$APP"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist"
+          rm -rf "$APP/_CodeSignature"
+          find "$APP" -type f -name embedded.mobileprovision -delete
+          find "$APP" -type f -print0 | while IFS= read -r -d '' file; do
+            if file "$file" | grep -q 'Mach-O'; then
+              codesign --remove-signature "$file" 2>/dev/null || true
+            fi
+          done
+          codesign --remove-signature "$APP" 2>/dev/null || true
+          mkdir -p "$GITHUB_WORKSPACE/output/Payload"
+          cp -R "$APP" "$GITHUB_WORKSPACE/output/Payload/3105.app"
+          (cd "$GITHUB_WORKSPACE/output" && zip -qry "$GITHUB_WORKSPACE/output/ThreeOneOSFive-standalone-unsigned.ipa" Payload)
+          unzip -tq "$GITHUB_WORKSPACE/output/ThreeOneOSFive-standalone-unsigned.ipa"
+          test ! -e "$GITHUB_WORKSPACE/output/Payload/3105.app/embedded.mobileprovision"
+          test ! -d "$GITHUB_WORKSPACE/output/Payload/3105.app/_CodeSignature"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ThreeOneOSFive-Standalone-IPA-Unsigned
+          path: output/ThreeOneOSFive-standalone-unsigned.ipa
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Publish standalone unsigned release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: 3105-standalone-unsigned-${{ github.run_number }}
+          name: 3105 Standalone IPA Unsigned
+          body: Standalone 3105 executor built from the replacement project. Unsigned for external signing.
+          files: output/ThreeOneOSFive-standalone-unsigned.ipa
+          fail_on_unmatched_files: true
