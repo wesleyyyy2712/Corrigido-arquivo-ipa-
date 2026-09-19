@@ -185,8 +185,9 @@ enum PatchPackageError: Error, Equatable {
     case restoreTargetsChanged([String])
     case activePatchCannotBeDeleted
     case privatePatchRequiresPassword
-    case privateOperationFailed
-    case applyFailed
+	case privateOperationFailed
+	case remoteExecutorFailed(String)
+	case applyFailed
     case restoreFailed
     case resetFailed
     case invalidImportLink
@@ -211,9 +212,10 @@ extension PatchPackageError: LocalizedError {
         case .restoreTargetsChanged: return "patch.error.restore_targets_changed"
         case .activePatchCannotBeDeleted: return "patch.error.active_delete"
         case .symbolicLinkUnsupported: return "patch.error.symlink"
-        case .privatePatchRequiresPassword: return "patch.error.private_password"
-        case .privateOperationFailed: return "patch.error.private_operation"
-        case .applyFailed: return "patch.error.apply"
+		case .privatePatchRequiresPassword: return "patch.error.private_password"
+		case .privateOperationFailed: return "patch.error.private_operation"
+		case .remoteExecutorFailed: return "patch.error.executor"
+		case .applyFailed: return "patch.error.apply"
         case .restoreFailed: return "patch.error.restore"
         case .resetFailed: return "patch.error.reset"
         case .invalidImportLink: return "patch.error.invalid_import_link"
@@ -231,9 +233,11 @@ extension PatchPackageError: LocalizedError {
 
     var localizationArgument: String? {
         switch self {
-        case .targetAppUnavailable(let bundleID), .targetOccupied(let bundleID):
-            return bundleID
-        case .restoreTargetsChanged(let paths):
+		case .targetAppUnavailable(let bundleID), .targetOccupied(let bundleID):
+			return bundleID
+		case .remoteExecutorFailed(let code):
+			return code
+		case .restoreTargetsChanged(let paths):
             return paths.joined(separator: "\n")
         default:
             return nil

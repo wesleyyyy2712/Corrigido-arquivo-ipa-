@@ -1,40 +1,40 @@
 import Foundation
 
 enum PatchExecutionCoordinator {
-    static func apply(project: PatchProject) throws -> PatchTransactionReceipt {
+	static func apply(project: PatchProject) throws -> PatchTransactionReceipt {
 #if PANEL_HOST
-        let result = try send(project: project, operation: .apply)
-        guard result.success else { throw PatchPackageError.applyFailed }
+		let result = try send(project: project, operation: .apply)
+		guard result.success else { throw PatchPackageError.remoteExecutorFailed(result.errorCode ?? "unknown") }
         return hostReceipt(for: project.id)
 #else
         return try DevicePatchService.apply(project: project)
 #endif
     }
 
-    static func inspectRestore(project: PatchProject) throws -> PatchRestoreInspection {
+	static func inspectRestore(project: PatchProject) throws -> PatchRestoreInspection {
 #if PANEL_HOST
-        let result = try send(project: project, operation: .inspectRestore)
-        guard result.success else { throw PatchPackageError.restoreFailed }
+		let result = try send(project: project, operation: .inspectRestore)
+		guard result.success else { throw PatchPackageError.remoteExecutorFailed(result.errorCode ?? "unknown") }
         return PatchRestoreInspection(changedTargets: result.changedTargets.map { PatchTargetChange(bundleID: $0.split(separator: "/", maxSplits: 1).first.map(String.init) ?? "", relativePath: $0.split(separator: "/", maxSplits: 1).dropFirst().joined(separator: "/"), kind: .modified) })
 #else
         return try DevicePatchService.inspectRestore(receipt: latestReceipt(projectID: project.id)!)
 #endif
     }
 
-    static func restore(project: PatchProject, allowChangedTargets: Bool = false) throws {
+	static func restore(project: PatchProject, allowChangedTargets: Bool = false) throws {
 #if PANEL_HOST
-        let result = try send(project: project, operation: .restore)
-        guard result.success else { throw PatchPackageError.restoreFailed }
+		let result = try send(project: project, operation: .restore)
+		guard result.success else { throw PatchPackageError.remoteExecutorFailed(result.errorCode ?? "unknown") }
 #else
         guard let receipt = DevicePatchService.latestReceipt(projectID: project.id) else { throw PatchPackageError.restoreFailed }
         try DevicePatchService.restore(receipt: receipt, allowChangedTargets: allowChangedTargets)
 #endif
     }
 
-    static func resetToAppliedState(receipt: PatchTransactionReceipt, project: PatchProject) throws {
+	static func resetToAppliedState(receipt: PatchTransactionReceipt, project: PatchProject) throws {
 #if PANEL_HOST
-        let result = try send(project: project, operation: .resetToAppliedState)
-        guard result.success else { throw PatchPackageError.resetFailed }
+		let result = try send(project: project, operation: .resetToAppliedState)
+		guard result.success else { throw PatchPackageError.remoteExecutorFailed(result.errorCode ?? "unknown") }
 #else
         try DevicePatchService.resetToAppliedState(receipt: receipt, project: project)
 #endif
@@ -62,7 +62,9 @@ enum PatchExecutionCoordinator {
             if result.success && operation == .restore { UserDefaults.standard.set(false, forKey: activeKey(project.id)) }
             semaphore.signal()
         }
-        guard semaphore.wait(timeout: .now() + 185) == .success, let response else { throw PatchPackageError.applyFailed }
+		guard semaphore.wait(timeout: .now() + 185) == .success, let response else {
+			throw PatchPackageError.remoteExecutorFailed("executorTimeout")
+		}
         return response
     }
     private static func activeKey(_ projectID: UUID) -> String { "Panel3105Bridge.active." + projectID.uuidString }

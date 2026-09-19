@@ -234,6 +234,7 @@
 "patch.error.restore_targets_changed" = "以下文件在应用补丁后发生更改，恢复前需要确认：\n%@";
 "patch.error.active_delete" = "此补丁仍处于生效状态。删除软件包前，请先恢复原始文件。";
 "patch.error.symlink" = "补丁目标路径不能经过符号链接。";
+"patch.error.executor" = "3105 拒绝了此操作。代码：%@";
 "patch.error.apply" = "无法应用补丁。之前的所有写入均已回滚。";
 "patch.error.restore" = "无法安全恢复原始文件。未覆盖任何未经验证的目标。";
 "patch.error.reset" = "无法将文件重置为应用时的软件包状态。所有部分写入均已回滚。";

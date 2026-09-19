@@ -29,11 +29,20 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }
 
     private var localizedBundle: Bundle {
-        guard let path = Bundle.main.path(forResource: rawValue, ofType: "lproj"),
-              let bundle = Bundle(path: path) else {
-            return .main
+        let resourceBundles = ["PanelHost", "EeveeSpotify", "ThreeOneOSFive"]
+        for resourceBundle in resourceBundles {
+            if let bundleURL = Bundle.main.url(forResource: resourceBundle, withExtension: "bundle"),
+               let bundle = Bundle(url: bundleURL),
+               let path = bundle.path(forResource: rawValue, ofType: "lproj"),
+               let localized = Bundle(path: path) {
+                return localized
+            }
         }
-        return bundle
+        if let path = Bundle.main.path(forResource: rawValue, ofType: "lproj"),
+           let bundle = Bundle(path: path) {
+            return bundle
+        }
+        return .main
     }
 }
 

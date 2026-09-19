@@ -234,6 +234,7 @@
 "patch.error.restore_targets_changed" = "These files changed after apply and require confirmation before restoration:\n%@";
 "patch.error.active_delete" = "This patch is still active. Restore its original files before deleting the package.";
 "patch.error.symlink" = "Patch targets cannot pass through symbolic links.";
+"patch.error.executor" = "O 3105 recusou a operação. Código: %@";
 "patch.error.apply" = "Não foi possível ativar o patch.";
 "patch.error.restore" = "Não foi possível restaurar os originais com segurança.";
 "patch.error.reset" = "The files could not be reset to the applied package state. Any partial writes were rolled back.";
