@@ -234,7 +234,6 @@
 "patch.error.restore_targets_changed" = "These files changed after apply and require confirmation before restoration:\n%@";
 "patch.error.active_delete" = "This patch is still active. Restore its original files before deleting the package.";
 "patch.error.symlink" = "Patch targets cannot pass through symbolic links.";
-"patch.error.executor" = "3105 rejected the operation. Code: %@";
 "patch.error.apply" = "The patch could not be applied. Any earlier writes were rolled back.";
 "patch.error.restore" = "The originals could not be restored safely. No unverified target was overwritten.";
 "patch.error.reset" = "The files could not be reset to the applied package state. Any partial writes were rolled back.";

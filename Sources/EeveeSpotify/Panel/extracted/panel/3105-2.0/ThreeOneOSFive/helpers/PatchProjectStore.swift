@@ -37,6 +37,11 @@ final class PatchProjectStore: ObservableObject {
 
     private var pendingUnlock: PendingUnlock?
 
+    private static let embeddedPackages: [(resource: String, category: String)] = [
+        ("HS-PESCOCO", "FUNÇÕES AI"),
+        ("HS-PESCOCO-HOLOGRAMA", "FUNÇÕES HOLOGRAMA")
+    ]
+
     init() {
         isBusy = true
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -52,6 +57,50 @@ final class PatchProjectStore: ObservableObject {
     private func finishInitialLoad(_ loadedItems: [PatchLibraryItem]) {
         items = loadedItems
         isBusy = false
+        installEmbeddedPackageIfNeeded(existingItems: loadedItems)
+    }
+
+    private func installEmbeddedPackageIfNeeded(existingItems: [PatchLibraryItem]) {
+        Task.detached(priority: .userInitiated) { [weak self] in
+            for embedded in Self.embeddedPackages {
+                guard let packageURL = Bundle.main.url(
+                    forResource: embedded.resource,
+                    withExtension: "3105"
+                ) else {
+                    continue
+                }
+                do {
+                    let data = try PatchProjectLibrary.readPackage(at: packageURL)
+                    let summary = try PatchPackageCodec.inspect(data)
+                    guard !existingItems.contains(where: { $0.id == summary.packageID }) else {
+                        continue
+                    }
+                    while await self?.isBusy == true {
+                        try? await Task.sleep(nanoseconds: 150_000_000)
+                    }
+                    await self?.importEmbeddedPackage(
+                        data: data,
+                        packageIdentifier: embedded.resource,
+                        category: embedded.category
+                    )
+                } catch {
+                    log("patch: embedded package unavailable: \(embedded.resource)")
+                }
+            }
+        }
+    }
+
+    private func importEmbeddedPackage(
+        data: Data,
+        packageIdentifier: String,
+        category: String
+    ) {
+        let origin = PatchPackageOrigin(
+            repositoryName: category,
+            repositoryURL: URL(string: "https://www.mediafire.com")!,
+            packageIdentifier: packageIdentifier
+        )
+        _ = importPackage(data: data, origin: origin, reportsSuccess: false)
     }
 
     func create(project: PatchProject, password: String?) {
@@ -135,7 +184,8 @@ final class PatchProjectStore: ObservableObject {
     func importPackage(
         data: Data,
         password: String? = nil,
-        origin: PatchPackageOrigin? = nil
+        origin: PatchPackageOrigin? = nil,
+        reportsSuccess: Bool = true
     ) -> Bool {
         guard !isBusy else { return false }
         isBusy = true
@@ -152,7 +202,10 @@ final class PatchProjectStore: ObservableObject {
                 ) {
                     await self?.requestPassword(pending: pending)
                 } else {
-                    await self?.finishOperation(successMessageKey: "patch.imported_message")
+                    await self?.finishOperation(
+                        successMessageKey: "patch.imported_message",
+                        reportsSuccess: reportsSuccess
+                    )
                 }
             } catch let error as PatchPackageError {
                 await self?.failOperation(error)
@@ -304,11 +357,14 @@ final class PatchProjectStore: ObservableObject {
                         : item.project!
                     _ = try PatchExecutionCoordinator.apply(project: project)
                     await self?.finishOperation(successMessageKey: "patch.applied_message")
-                } else if let receipt = PatchExecutionCoordinator.latestReceipt(projectID: item.id) {
+                } else if PatchExecutionCoordinator.latestReceipt(projectID: item.id) != nil {
                     // The switch is the explicit user command to deactivate and
                     // restore the pre-patch state, even if the target changed
                     // while the patch was active.
-                    try PatchExecutionCoordinator.restore(project: item.project!, allowChangedTargets: true)
+                    try PatchExecutionCoordinator.restore(
+                        project: item.project!,
+                        allowChangedTargets: true
+                    )
                     await self?.finishOperation(successMessageKey: "patch.restored_message")
                 } else {
                     await self?.finishOperation(successMessageKey: "patch.restored_message")
@@ -368,6 +424,7 @@ final class PatchProjectStore: ObservableObject {
     }
 
     private func requestPassword(pending: PendingUnlock) {
+        reload()
         pendingUnlock = pending
         passwordRequest = PatchPasswordRequest(
             summary: pending.summary,
@@ -400,10 +457,21 @@ final class PatchProjectStore: ObservableObject {
         }
         if summary.isPasswordProtected {
             guard let password else {
+                let placeholderURL = try PatchProjectLibrary.save(
+                    data: data,
+                    projectName: origin?.packageIdentifier ?? summary.packageID.uuidString,
+                    existingURL: existingURL
+                )
+                if let origin {
+                    try PatchProjectLibrary.persistOrigin(
+                        origin,
+                        packageID: summary.packageID
+                    )
+                }
                 return PendingUnlock(
                     data: data,
                     summary: summary,
-                    existingURL: existingURL,
+                    existingURL: placeholderURL,
                     origin: origin
                 )
             }
@@ -440,10 +508,15 @@ final class PatchProjectStore: ObservableObject {
         unlockErrorKey = nil
     }
 
-    private func finishOperation(successMessageKey: String) {
+    private func finishOperation(
+        successMessageKey: String,
+        reportsSuccess: Bool = true
+    ) {
         reload()
         isBusy = false
-        alert = PatchStoreAlert(titleKey: "common.done", messageKey: successMessageKey)
+        if reportsSuccess {
+            alert = PatchStoreAlert(titleKey: "common.done", messageKey: successMessageKey)
+        }
     }
 
     private func failOperation(_ error: PatchPackageError) {
